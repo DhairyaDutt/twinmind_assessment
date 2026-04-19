@@ -1104,6 +1104,7 @@ async function flushTranscription() {
     const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
     formData.append('file', blob, `audio.${ext}`);
     formData.append('model', WHISPER_MODEL);
+    formData.append('language', 'en');
 
     const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
@@ -1114,7 +1115,6 @@ async function flushTranscription() {
     const data = await res.json();
     if (data.text) {
       addTranscriptChunk(data.text);
-      setTimeout(() => generateSuggestions(), 100);
     }
   } catch (err) {
     console.error('Transcription error:', err);
@@ -1217,6 +1217,7 @@ async function generateSuggestions() {
         model: CHAT_MODEL,
         max_tokens: 800,
         temperature: 0.7,
+        response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -1501,7 +1502,7 @@ async function streamChatResponse(directPrompt, isSuggestion, messagesOverride) 
   bubbleContent.innerHTML = renderMarkdownToHtml(fullText);
 
     // Save to history
-    chatHistory.push({ role: 'assistant', content: fullText });
+    chatHistory.push({ role: 'assistant', content: fullText, timestamp: new Date().toISOString() });
 
   } catch(err) {
     const msg = err && err.message ? err.message : String(err);
@@ -1529,7 +1530,7 @@ function addChatMessage(role, content, tag, isStreaming) {
   msgs.appendChild(div);
 
   if (role === 'user') {
-    chatHistory.push({ role: 'user', content });
+    chatHistory.push({ role: 'user', content, timestamp: new Date().toISOString() });
   }
 
   document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
