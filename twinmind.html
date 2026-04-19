@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TwinMind — Live Suggestions</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f11;
+    --surface: #17171a;
+    --surface2: #1e1e23;
+    --border: #2a2a32;
+    --border-light: #35353f;
+    --text: #e8e8ec;
+    --text-muted: #6b6b7a;
+    --text-dim: #44444f;
+    --accent: #6366f1;
+    --accent-glow: rgba(99,102,241,0.15);
+    --accent-soft: rgba(99,102,241,0.08);
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --cyan: #06b6d4;
+    --q-color: #818cf8;
+    --t-color: #34d399;
+    --a-color: #fb923c;
+    --f-color: #f472b6;
+    --col-w: calc((100vw - 4px) / 3);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── TOPBAR ─── */
+  #topbar {
+    height: 48px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 100;
+  }
+
+  #topbar .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+
+  #topbar .logo span { color: var(--accent); }
+
+  #topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid var(--border-light);
+    background: var(--surface2);
+    color: var(--text-muted);
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--text); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn.primary:hover { opacity: 0.85; }
+  .btn.danger { border-color: var(--rose); color: var(--rose); }
+  .btn.danger:hover { background: rgba(244,63,94,0.1); }
+
+  /* ─── MAIN 3 COLS ─── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .col {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .col:last-child { border-right: none; }
+
+  .col-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .col-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .col-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .col-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-light) transparent;
+  }
+  .col-body::-webkit-scrollbar { width: 4px; }
+  .col-body::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+  /* ─── STATUS DOT ─── */
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+  }
+  .dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  .dot.waiting { background: var(--amber); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ─── COL 1: TRANSCRIPT ─── */
+  #mic-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--border-light);
+    background: var(--surface2);
+    color: var(--text-muted);
+    transition: all 0.15s;
+    margin-left: auto;
+  }
+  #mic-btn.recording {
+    border-color: var(--rose);
+    color: var(--rose);
+    background: rgba(244,63,94,0.08);
+  }
+  #mic-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  #transcript-area {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .transcript-chunk {
+    display: flex;
+    gap: 10px;
+    animation: fadeSlideIn 0.3s ease;
+  }
+
+  .chunk-time {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    padding-top: 2px;
+    flex-shrink: 0;
+    min-width: 56px;
+  }
+
+  .chunk-text {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--text);
+  }
+
+  .interim-text {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .empty-state {
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.7;
+    text-align: center;
+    padding: 40px 20px;
+  }
+
+  /* ─── COL 2: SUGGESTIONS ─── */
+  #suggestions-header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--border-light);
+    background: var(--surface2);
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+  #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #refresh-btn.spinning svg { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #countdown {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  #suggestions-area {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .suggestion-batch {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: fadeSlideIn 0.4s ease;
+  }
+
+  .suggestion-batch.old { opacity: 0.45; }
+
+  .batch-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 2px;
+  }
+
+  .suggestion-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--surface2);
+    position: relative;
+    overflow: hidden;
+  }
+  .suggestion-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 3px 0 0 3px;
+  }
+  .suggestion-card.type-question::before { background: var(--q-color); }
+  .suggestion-card.type-talking::before { background: var(--t-color); }
+  .suggestion-card.type-answer::before { background: var(--a-color); }
+  .suggestion-card.type-fact::before { background: var(--f-color); }
+
+  .suggestion-card:hover {
+    border-color: var(--border-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  .suggestion-type {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .type-question .suggestion-type { color: var(--q-color); }
+  .type-talking .suggestion-type { color: var(--t-color); }
+  .type-answer .suggestion-type { color: var(--a-color); }
+  .type-fact .suggestion-type { color: var(--f-color); }
+
+  .suggestion-preview {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .suggestion-loading {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .skeleton {
+    height: 80px;
+    border-radius: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+    animation: shimmer 1.2s infinite;
+  }
+  @keyframes shimmer { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+
+  /* ─── COL 3: CHAT ─── */
+  #chat-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 100%;
+    justify-content: flex-end;
+  }
+
+  .chat-msg {
+    animation: fadeSlideIn 0.3s ease;
+  }
+
+  .chat-msg.user .msg-bubble {
+    background: var(--accent-soft);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 10px 10px 2px 10px;
+    margin-left: 20px;
+  }
+
+  .chat-msg.assistant .msg-bubble {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px 10px 10px 10px;
+    margin-right: 20px;
+  }
+
+  .msg-bubble {
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .msg-role {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .msg-suggestion-tag {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: var(--accent-soft);
+    border: 1px solid rgba(99,102,241,0.2);
+    color: var(--accent);
+  }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 2px;
+    height: 13px;
+    background: var(--accent);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 0.9s step-end infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  #chat-empty {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 40px 20px;
+    line-height: 1.7;
+  }
+
+  #chat-input-area {
+    border-top: 1px solid var(--border);
+    padding: 12px;
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  #chat-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 9px 12px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+    min-height: 38px;
+    max-height: 100px;
+  }
+  #chat-input:focus { border-color: var(--accent); }
+  #chat-input::placeholder { color: var(--text-dim); }
+
+  #send-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+  #send-btn:hover { opacity: 0.85; }
+
+  /* ─── MODAL (Settings / API Key) ─── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  @keyframes fadeSlideIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 14px;
+    padding: 28px;
+    width: min(580px, 95vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  }
+
+  .modal h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+
+  .modal p.sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 22px;
+    line-height: 1.6;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 16px;
+  }
+
+  .field-group label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+
+  .field-group input,
+  .field-group textarea,
+  .field-group select {
+    background: var(--surface2);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12.5px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  .field-group input:focus,
+  .field-group textarea:focus { border-color: var(--accent); }
+  .field-group textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+  .field-group .hint { font-size: 11px; color: var(--text-dim); }
+
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 24px;
+  }
+
+  /* ─── API KEY GATE ─── */
+  #api-gate {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .gate-box {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+    padding: 40px;
+    width: min(460px, 92vw);
+    text-align: center;
+  }
+
+  .gate-box .gate-logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+  .gate-box .gate-logo span { color: var(--accent); }
+
+  .gate-box p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    line-height: 1.65;
+  }
+
+  .gate-box input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 11px 14px;
+    outline: none;
+    margin-bottom: 12px;
+    transition: border-color 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .gate-box input:focus { border-color: var(--accent); }
+
+  .gate-box .gate-btn {
+    width: 100%;
+    padding: 11px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .gate-box .gate-btn:hover { opacity: 0.85; }
+
+  .error-msg {
+    color: var(--rose);
+    font-size: 12px;
+    margin-top: 8px;
+    min-height: 18px;
+  }
+
+  /* ─── BATCH COUNT BADGE ─── */
+  .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  /* scrollbar */
+  * { scrollbar-width: thin; scrollbar-color: var(--border-light) transparent; }
+</style>
+</head>
+<body>
+
+<!-- API KEY GATE -->
+<div id="api-gate">
+  <div class="gate-box">
+    <div class="gate-logo">Twin<span>Mind</span></div>
+    <p>Live AI suggestions for your conversations.<br>Enter your <strong>Groq API key</strong> to get started.</p>
+    <input type="password" id="gate-key-input" placeholder="gsk_…" autocomplete="off" />
+    <button class="gate-btn" onclick="submitApiKey()">Start Session</button>
+    <div class="error-msg" id="gate-error"></div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">Twin<span>Mind</span></div>
+  <span style="font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;">live suggestions</span>
+  <div id="topbar-right">
+    <button class="btn" onclick="exportSession()">⬇ Export</button>
+    <button class="btn" onclick="openSettings()">⚙ Settings</button>
+    <button class="btn danger" onclick="clearApiKey()">Change Key</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- COL 1: TRANSCRIPT -->
+  <div class="col" id="col-transcript">
+    <div class="col-header">
+      <div class="dot" id="mic-dot"></div>
+      <span class="col-title">Mic & Transcript</span>
+      <span class="col-label" id="mic-status">IDLE</span>
+      <button id="mic-btn" onclick="toggleMic()">▶ Start</button>
+    </div>
+    <div class="col-body" id="transcript-body">
+      <div class="empty-state" id="transcript-empty">
+        Click <strong>Start</strong> to begin recording.<br>Transcript appears here in chunks.
+      </div>
+      <div id="transcript-area"></div>
+      <div id="interim-line"></div>
+    </div>
+  </div>
+
+  <!-- COL 2: SUGGESTIONS -->
+  <div class="col" id="col-suggestions">
+    <div class="col-header">
+      <span class="col-title">Live Suggestions</span>
+      <span class="badge" id="batch-count">0 batches</span>
+      <div id="suggestions-header-right">
+        <button id="refresh-btn" onclick="manualRefresh()">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+          Reload
+        </button>
+        <span id="countdown" style="display:none"></span>
+      </div>
+    </div>
+    <div class="col-body" id="suggestions-body">
+      <div class="empty-state" id="suggestions-empty">
+        Suggestions will appear here after you start speaking.<br>Auto-refreshes every ~30 seconds.
+      </div>
+      <div id="suggestions-area"></div>
+    </div>
+  </div>
+
+  <!-- COL 3: CHAT -->
+  <div class="col" id="col-chat">
+    <div class="col-header">
+      <span class="col-title">Chat</span>
+      <span class="col-label">Session Only</span>
+    </div>
+    <div class="col-body" id="chat-body">
+      <div id="chat-empty">Click a suggestion card or type a question below.</div>
+      <div id="chat-messages"></div>
+    </div>
+    <div id="chat-input-area">
+      <textarea id="chat-input" rows="1" placeholder="Ask anything…" onkeydown="chatKeydown(event)"></textarea>
+      <button id="send-btn" onclick="sendChat()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settings-modal" style="display:none" onclick="closeSettingsOutside(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h2>Settings</h2>
+    <p class="sub">Tune prompts, context windows, and refresh intervals. Defaults are optimized for general meetings.</p>
+
+    <div class="field-group">
+      <label>Groq API Key</label>
+      <input type="password" id="s-apikey" placeholder="gsk_…" />
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="field-group">
+      <label>Live Suggestion Prompt</label>
+      <textarea id="s-suggestion-prompt" rows="6"></textarea>
+      <span class="hint">Context: recent transcript. Output: exactly 3 JSON suggestions.</span>
+    </div>
+
+    <div class="field-group">
+      <label>Suggestion Context Window (chars)</label>
+      <input type="number" id="s-suggestion-ctx" min="500" max="20000" step="100" />
+      <span class="hint">How much recent transcript to include when generating suggestions.</span>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="field-group">
+      <label>Detailed Answer Prompt (on card click)</label>
+      <textarea id="s-answer-prompt" rows="5"></textarea>
+      <span class="hint">Context: full transcript + suggestion clicked. Produces detailed response.</span>
+    </div>
+
+    <div class="field-group">
+      <label>Answer Context Window (chars)</label>
+      <input type="number" id="s-answer-ctx" min="500" max="40000" step="100" />
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="field-group">
+      <label>Chat System Prompt</label>
+      <textarea id="s-chat-prompt" rows="4"></textarea>
+    </div>
+
+    <div class="field-group">
+      <label>Auto-Refresh Interval (seconds)</label>
+      <input type="number" id="s-interval" min="10" max="120" step="5" />
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeSettings()">Cancel</button>
+      <button class="btn primary" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let apiKey = '';
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let transcriptChunks = []; // [{time, text}]
+let suggestionBatches = []; // [{time, suggestions:[{type,preview}]}]
+let chatHistory = []; // [{role,content,tag?}]
+let countdownTimer = null;
+let countdownVal = 0;
+let autoRefreshTimer = null;
+let isGeneratingSuggestions = false;
+let isSendingChat = false;
+let recordingInterval = null;
+let transcribingBuffer = false;
+let interimText = '';
+
+// Groq model IDs 
+const WHISPER_MODEL = 'whisper-large-v3';
+const CHAT_MODEL = 'openai/gpt-oss-120b';
+
+// ═══════════════════════════════════════════
+// SETTINGS (defaults)
+// ═══════════════════════════════════════════
+const DEFAULT_SETTINGS = {
+  suggestionPrompt: `You are an AI meeting copilot generating real-time suggestions. Analyze the recent conversation transcript and produce exactly 3 suggestions that would genuinely help the person RIGHT NOW.
+
+Each suggestion must be one of these types:
+- QUESTION: A question the user could ask to move the conversation forward
+- TALKING_POINT: A relevant fact, example, or data point to share
+- ANSWER: A direct answer to a question that was just asked
+- FACT_CHECK: A correction or clarification of something said
+
+Rules:
+- Choose types based on what the conversation actually needs (mix types intelligently)
+- Each preview must standalone deliver value — useful even if never clicked
+- Be specific and concrete, not generic
+- If someone just asked a question, prioritize ANSWER type
+- If the conversation is about a technical topic, include relevant TALKING_POINT with numbers/data
+- If a claim seems questionable, add a FACT_CHECK
+- Previews should be 1-2 punchy sentences max
+
+RECENT TRANSCRIPT:
+{{TRANSCRIPT}}
+
+Respond with ONLY valid JSON, no markdown, no explanation:
+{"suggestions":[{"type":"QUESTION","preview":"..."},{"type":"TALKING_POINT","preview":"..."},{"type":"FACT_CHECK","preview":"..."}]}`,
+
+  answerPrompt: `You are an AI meeting copilot providing a detailed, helpful answer. The user clicked this suggestion during a live conversation.
+
+Suggestion clicked: {{SUGGESTION}}
+
+Full conversation context:
+{{TRANSCRIPT}}
+
+Provide a clear, well-structured response (3-6 sentences or bullet points as appropriate). Be specific, accurate, and immediately useful. Avoid filler. Write as if you're a knowledgeable colleague whispering in their ear.`,
+
+  chatPrompt: `You are TwinMind, an AI meeting copilot. You have access to the live conversation transcript below. Answer the user's question concisely and helpfully, referencing the conversation context when relevant. Be direct and useful.
+
+CONVERSATION TRANSCRIPT:
+{{TRANSCRIPT}}`,
+
+  suggestionCtx: 3000,
+  answerCtx: 8000,
+  refreshInterval: 30,
+};
+
+let settings = { ...DEFAULT_SETTINGS };
+
+function loadSettings() {
+  try {
+    const stored = sessionStorage.getItem('tm_settings');
+    if (stored) settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+    const key = sessionStorage.getItem('tm_apikey');
+    if (key) { apiKey = key; hideGate(); }
+  } catch(e) {}
+}
+
+function saveSettingsToStorage() {
+  sessionStorage.setItem('tm_settings', JSON.stringify(settings));
+}
+
+// ═══════════════════════════════════════════
+// API KEY GATE
+// ═══════════════════════════════════════════
+function submitApiKey() {
+  const val = document.getElementById('gate-key-input').value.trim();
+  if (!val.startsWith('gsk_') || val.length < 20) {
+    document.getElementById('gate-error').textContent = 'Enter a valid Groq API key (starts with gsk_)';
+    return;
+  }
+  apiKey = val;
+  sessionStorage.setItem('tm_apikey', val);
+  hideGate();
+}
+
+function hideGate() {
+  document.getElementById('api-gate').style.display = 'none';
+}
+
+function clearApiKey() {
+  sessionStorage.removeItem('tm_apikey');
+  apiKey = '';
+  stopRecording();
+  document.getElementById('api-gate').style.display = 'flex';
+  document.getElementById('gate-key-input').value = '';
+  document.getElementById('gate-error').textContent = '';
+}
+
+document.getElementById('gate-key-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitApiKey();
+});
+
+// ═══════════════════════════════════════════
+// SETTINGS MODAL
+// ═══════════════════════════════════════════
+function openSettings() {
+  document.getElementById('s-apikey').value = apiKey;
+  document.getElementById('s-suggestion-prompt').value = settings.suggestionPrompt;
+  document.getElementById('s-suggestion-ctx').value = settings.suggestionCtx;
+  document.getElementById('s-answer-prompt').value = settings.answerPrompt;
+  document.getElementById('s-answer-ctx').value = settings.answerCtx;
+  document.getElementById('s-chat-prompt').value = settings.chatPrompt;
+  document.getElementById('s-interval').value = settings.refreshInterval;
+  document.getElementById('settings-modal').style.display = 'flex';
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').style.display = 'none';
+}
+
+function closeSettingsOutside(e) {
+  if (e.target === document.getElementById('settings-modal')) closeSettings();
+}
+
+function saveSettings() {
+  const newKey = document.getElementById('s-apikey').value.trim();
+  if (newKey && newKey.startsWith('gsk_')) {
+    apiKey = newKey;
+    sessionStorage.setItem('tm_apikey', newKey);
+  }
+  settings.suggestionPrompt = document.getElementById('s-suggestion-prompt').value;
+  settings.suggestionCtx = parseInt(document.getElementById('s-suggestion-ctx').value) || DEFAULT_SETTINGS.suggestionCtx;
+  settings.answerPrompt = document.getElementById('s-answer-prompt').value;
+  settings.answerCtx = parseInt(document.getElementById('s-answer-ctx').value) || DEFAULT_SETTINGS.answerCtx;
+  settings.chatPrompt = document.getElementById('s-chat-prompt').value;
+  settings.refreshInterval = parseInt(document.getElementById('s-interval').value) || DEFAULT_SETTINGS.refreshInterval;
+  saveSettingsToStorage();
+  closeSettings();
+  // restart countdown with new interval
+  if (isRecording) startCountdown();
+}
+
+// ═══════════════════════════════════════════
+// MIC / RECORDING
+// ═══════════════════════════════════════════
+async function toggleMic() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+    audioChunks = [];
+
+    // Keep a running buffer so we can show/interact with interim data if needed.
+    // We'll use requestData() when we want a well-formed file for upload so
+    // each blob includes necessary headers (avoids invalid/missing-header fragments).
+    mediaRecorder.ondataavailable = e => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    // Start without a timeslice to avoid fragmented clusters that lack headers.
+    mediaRecorder.start();
+
+    isRecording = true;
+    updateMicUI(true);
+    hideEmpty('transcript-empty');
+    startCountdown();
+
+    // Set up 30s transcription cycle
+    recordingInterval = setInterval(flushTranscription, settings.refreshInterval * 1000);
+  } catch (err) {
+    alert('Microphone access denied. Please allow microphone access and try again.');
+  }
+}
+
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+
+  clearInterval(recordingInterval);
+  clearInterval(autoRefreshTimer);
+  clearCountdown();
+
+  updateMicUI(false);
+}
+
+function updateMicUI(recording) {
+  const dot = document.getElementById('mic-dot');
+  const btn = document.getElementById('mic-btn');
+  const status = document.getElementById('mic-status');
+
+  if (recording) {
+    dot.className = 'dot active';
+    btn.textContent = '■ Stop';
+    btn.className = 'recording';
+    status.textContent = 'RECORDING';
+  } else {
+    dot.className = 'dot';
+    btn.textContent = '▶ Start';
+    btn.className = '';
+    status.textContent = 'IDLE';
+  }
+}
+
+function getSupportedMimeType() {
+  const types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+// ═══════════════════════════════════════════
+// TRANSCRIPTION via Groq Whisper
+// ═══════════════════════════════════════════
+async function flushTranscription() {
+  if (!isRecording || transcribingBuffer) return;
+  transcribingBuffer = true;
+
+  try {
+    // 1. Capture the current data by stopping the recorder
+    const blob = await new Promise(resolve => {
+      mediaRecorder.onstop = () => {
+        const fullBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+        audioChunks = []; // Clear for next round
+        resolve(fullBlob);
+      };
+      mediaRecorder.stop(); 
+    });
+
+    // 2. Immediately restart recording so we don't miss much audio
+    const stream = mediaRecorder.stream;
+    mediaRecorder = new MediaRecorder(stream, { mimeType: getSupportedMimeType() });
+    mediaRecorder.ondataavailable = e => {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    };
+    mediaRecorder.start();
+
+    // 3. Proceed with Upload if blob is significant
+    if (blob.size < 1000) { 
+      transcribingBuffer = false;
+      return; 
+    }
+
+    const formData = new FormData();
+    // Ensure extension matches the mimeType
+    const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+    formData.append('file', blob, `audio.${ext}`);
+    formData.append('model', WHISPER_MODEL);
+
+    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: formData
+    });
+
+    const data = await res.json();
+    if (data.text) {
+      addTranscriptChunk(data.text);
+      setTimeout(() => generateSuggestions(), 100);
+    }
+  } catch (err) {
+    console.error('Transcription error:', err);
+  }
+  transcribingBuffer = false;
+}
+
+function addTranscriptChunk(text) {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  transcriptChunks.push({ time: timeStr, text });
+
+  const area = document.getElementById('transcript-area');
+  const div = document.createElement('div');
+  div.className = 'transcript-chunk';
+  div.innerHTML = `<span class="chunk-time">${timeStr}</span><span class="chunk-text">${escHtml(text)}</span>`;
+  area.appendChild(div);
+
+  // Auto-scroll
+  const body = document.getElementById('transcript-body');
+  body.scrollTop = body.scrollHeight;
+}
+
+// ═══════════════════════════════════════════
+// COUNTDOWN + AUTO-REFRESH
+// ═══════════════════════════════════════════
+function startCountdown() {
+  clearCountdown();
+  countdownVal = settings.refreshInterval;
+  const el = document.getElementById('countdown');
+  el.style.display = 'inline';
+  el.textContent = `auto-refresh in ${countdownVal}s`;
+
+  countdownTimer = setInterval(async () => {
+    countdownVal--;
+    if (countdownVal <= 0) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      document.getElementById('countdown').style.display = 'none';
+
+      if (isRecording) {
+        const btn = document.getElementById('refresh-btn');
+        btn.classList.add('spinning');
+        await flushTranscription();
+        // Small delay to ensure transcriptChunks is updated
+        await new Promise(r => setTimeout(r, 200));
+        await generateSuggestions();
+        btn.classList.remove('spinning');
+        if (isRecording) startCountdown(); // restart
+      }
+    } else {
+      el.textContent = `auto-refresh in ${countdownVal}s`;
+    }
+  }, 1000);
+}
+
+function clearCountdown() {
+  clearInterval(countdownTimer);
+  document.getElementById('countdown').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════
+// SUGGESTIONS via Groq Chat
+// ═══════════════════════════════════════════
+async function generateSuggestions() {
+  if (isGeneratingSuggestions) return;
+
+  const fullTranscript = transcriptChunks.map(c => `[${c.time}] ${c.text}`).join('\n');
+  if (!fullTranscript.trim()) {
+    console.log('[TwinMind] No transcript yet, skipping suggestions');
+    return;
+  }
+
+  isGeneratingSuggestions = true;
+  hideEmpty('suggestions-empty');
+  showSuggestionSkeleton();
+  clearSuggestionError();
+
+  const recentTranscript = fullTranscript.slice(-settings.suggestionCtx);
+  const prompt = settings.suggestionPrompt.replace('{{TRANSCRIPT}}', recentTranscript);
+
+  console.log('[TwinMind] Generating suggestions, transcript length:', recentTranscript.length);
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: CHAT_MODEL,
+        max_tokens: 800,
+        temperature: 0.7,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.error?.message || `HTTP ${res.status}`;
+      console.error('[TwinMind] Suggestion API error:', res.status, err);
+      hideSuggestionSkeleton();
+      showSuggestionError(`Suggestions failed: ${msg}`);
+      isGeneratingSuggestions = false;
+      return;
+    }
+
+    const data = await res.json();
+    const raw = data.choices?.[0]?.message?.content || '';
+    console.log('[TwinMind] Raw suggestion response:', raw.substring(0, 200));
+
+    const parsed = parseSuggestions(raw);
+
+    if (parsed && parsed.length > 0) {
+      addSuggestionBatch(parsed);
+    } else {
+      console.warn('[TwinMind] Could not parse suggestions from:', raw);
+      showSuggestionError('Could not parse suggestions — model returned unexpected format.');
+    }
+  } catch (err) {
+    console.error('[TwinMind] Suggestion fetch error:', err);
+    showSuggestionError(`Network error: ${err.message}`);
+  }
+
+  hideSuggestionSkeleton();
+  isGeneratingSuggestions = false;
+}
+
+function showSuggestionError(msg) {
+  clearSuggestionError();
+  const area = document.getElementById('suggestions-area');
+  const div = document.createElement('div');
+  div.id = 'suggestion-error';
+  div.style.cssText = 'color:var(--rose);font-size:12px;padding:10px 14px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.2);border-radius:8px;font-family:"IBM Plex Mono",monospace;line-height:1.5;';
+  div.textContent = '⚠ ' + msg;
+  area.insertBefore(div, area.firstChild);
+}
+
+function clearSuggestionError() {
+  const el = document.getElementById('suggestion-error');
+  if (el) el.remove();
+}
+
+function parseSuggestions(raw) {
+  try {
+    // Strip markdown fences if present
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const obj = JSON.parse(clean);
+    return (obj.suggestions || []).slice(0, 3);
+  } catch(e) {
+    // Try regex fallback
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        const obj = JSON.parse(match[0]);
+        return (obj.suggestions || []).slice(0, 3);
+      } catch(e2) {}
+    }
+    return null;
+  }
+}
+
+function addSuggestionBatch(suggestions) {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+  suggestionBatches.unshift({ time: timeStr, suggestions });
+
+  // Update batch count
+  document.getElementById('batch-count').textContent = `${suggestionBatches.length} batch${suggestionBatches.length !== 1 ? 'es' : ''}`;
+
+  const area = document.getElementById('suggestions-area');
+
+  // Fade old batches
+  area.querySelectorAll('.suggestion-batch').forEach(b => b.classList.add('old'));
+
+  // Prepend new batch
+  const batchDiv = document.createElement('div');
+  batchDiv.className = 'suggestion-batch';
+  batchDiv.innerHTML = `<div class="batch-label">Batch ${suggestionBatches.length} · ${timeStr}</div>`;
+
+  suggestions.forEach((s, i) => {
+    const typeClass = typeToClass(s.type);
+    const card = document.createElement('div');
+    card.className = `suggestion-card ${typeClass}`;
+    card.innerHTML = `
+      <div class="suggestion-type">${formatType(s.type)}</div>
+      <div class="suggestion-preview">${escHtml(s.preview)}</div>
+    `;
+    card.onclick = () => clickSuggestion(s);
+    batchDiv.appendChild(card);
+  });
+
+  area.insertBefore(batchDiv, area.firstChild);
+
+  // Scroll suggestions to top
+  document.getElementById('suggestions-body').scrollTop = 0;
+}
+
+function typeToClass(type) {
+  const map = { QUESTION:'type-question', TALKING_POINT:'type-talking', ANSWER:'type-answer', FACT_CHECK:'type-fact' };
+  return map[type] || 'type-question';
+}
+
+function formatType(type) {
+  const map = { QUESTION:'Question to Ask', TALKING_POINT:'Talking Point', ANSWER:'Answer', FACT_CHECK:'Fact-Check' };
+  return map[type] || type;
+}
+
+let skeletonEl = null;
+function showSuggestionSkeleton() {
+  skeletonEl = document.createElement('div');
+  skeletonEl.className = 'suggestion-loading';
+  skeletonEl.id = 'suggestion-skeleton';
+  skeletonEl.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+  const area = document.getElementById('suggestions-area');
+  area.insertBefore(skeletonEl, area.firstChild);
+}
+function hideSuggestionSkeleton() {
+  const el = document.getElementById('suggestion-skeleton');
+  if (el) el.remove();
+}
+
+async function manualRefresh() {
+  if (!apiKey) return;
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  await flushTranscription();
+  await new Promise(r => setTimeout(r, 200));
+  await generateSuggestions();
+  btn.classList.remove('spinning');
+  if (isRecording) startCountdown();
+}
+
+// ═══════════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════════
+async function clickSuggestion(suggestion) {
+  const tag = `${formatType(suggestion.type)}: ${suggestion.preview}`;
+  const fullTranscript = transcriptChunks
+    .map(c => `[${c.time}] ${c.text}`)
+    .join('\n')
+    .slice(-settings.answerCtx);
+
+  const prompt = settings.answerPrompt
+    .replace('{{SUGGESTION}}', suggestion.preview)
+    .replace('{{TRANSCRIPT}}', fullTranscript);
+
+  addChatMessage('user', suggestion.preview, tag);
+  await streamChatResponse(prompt, true);
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || isSendingChat) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  addChatMessage('user', text);
+
+  const fullTranscript = transcriptChunks
+    .map(c => `[${c.time}] ${c.text}`)
+    .join('\n')
+    .slice(-settings.answerCtx);
+
+  const systemPrompt = settings.chatPrompt.replace('{{TRANSCRIPT}}', fullTranscript);
+
+  // Build messages array with history
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...chatHistory.filter(m => m.role !== 'system').map(m => ({ role: m.role, content: m.content })),
+    { role: 'user', content: text }
+  ];
+
+  await streamChatResponse(null, false, messages);
+}
+
+async function streamChatResponse(directPrompt, isSuggestion, messagesOverride) {
+  if (isSendingChat) return;
+  isSendingChat = true;
+
+  const msgEl = addChatMessage('assistant', '', null, true);
+  const bubbleContent = msgEl.querySelector('.msg-text');
+
+  let messages;
+  if (messagesOverride) {
+    messages = messagesOverride;
+  } else {
+    // Direct prompt (suggestion click)
+    const fullTranscript = transcriptChunks.map(c => `[${c.time}] ${c.text}`).join('\n').slice(-settings.answerCtx);
+    const sysPrompt = settings.chatPrompt.replace('{{TRANSCRIPT}}', fullTranscript);
+    messages = [
+      { role: 'system', content: sysPrompt },
+      { role: 'user', content: directPrompt }
+    ];
+  }
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: CHAT_MODEL,
+        max_tokens: 1000,
+        temperature: 0.5,
+        stream: true,
+        messages
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      bubbleContent.textContent = `Error: ${err?.error?.message || 'API error'}`;
+      isSendingChat = false;
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let cursor = document.createElement('span');
+    cursor.className = 'cursor-blink';
+    bubbleContent.appendChild(cursor);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+
+      for (const line of lines) {
+        const json = line.slice(6);
+        if (json === '[DONE]') continue;
+        try {
+          const obj = JSON.parse(json);
+          const delta = obj.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            fullText += delta;
+            bubbleContent.textContent = fullText;
+            bubbleContent.appendChild(cursor);
+            document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
+          }
+        } catch(e) {}
+      }
+    }
+
+    cursor.remove();
+    bubbleContent.textContent = fullText;
+
+    // Save to history
+    chatHistory.push({ role: 'assistant', content: fullText });
+
+  } catch(err) {
+    bubbleContent.textContent = 'Connection error. Check your API key and try again.';
+  }
+
+  isSendingChat = false;
+  document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
+}
+
+function addChatMessage(role, content, tag, isStreaming) {
+  const empty = document.getElementById('chat-empty');
+  if (empty) empty.style.display = 'none';
+
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+
+  let inner = `<div class="msg-role">${role === 'user' ? 'You' : 'TwinMind'}</div>`;
+  if (tag) inner += `<div class="msg-suggestion-tag">↗ ${escHtml(tag.substring(0,60))}…</div>`;
+  inner += `<div class="msg-bubble"><span class="msg-text">${escHtml(content)}</span></div>`;
+  div.innerHTML = inner;
+
+  msgs.appendChild(div);
+
+  if (role === 'user') {
+    chatHistory.push({ role: 'user', content });
+  }
+
+  document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
+  return div;
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+  // Auto-resize
+  const ta = document.getElementById('chat-input');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 100) + 'px';
+}
+
+// ═══════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════
+function exportSession() {
+  const data = {
+    exported_at: new Date().toISOString(),
+    transcript: transcriptChunks,
+    suggestion_batches: suggestionBatches,
+    chat_history: chatHistory
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `twinmind-session-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function hideEmpty(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+loadSettings();
+</script>
+</body>
+</html>
