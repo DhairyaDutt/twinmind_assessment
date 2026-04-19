@@ -354,6 +354,27 @@
   @keyframes shimmer { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
 
   /* ─── COL 3: CHAT ─── */
+
+  /* Container allows horizontal scrolling */
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px; /* Forces scrollbar if the area is too narrow */
+  }
+
+  th, td {
+    text-align: left;
+    white-space: nowrap; /* Prevents text from bunching up */
+    padding: 10px;
+  }
+
   #chat-messages {
     display: flex;
     flex-direction: column;
@@ -1552,8 +1573,16 @@ function renderMarkdownToHtml(md) {
   let tableHeaderParsed = false;
 
   const closeAll = () => {
-    if (inUl) { html += '</ul>'; inUl = false; }
-    if (inTable) { html += '</table>'; inTable = false; tableHeaderParsed = false; }
+    if (inUl) { 
+      html += '</ul>'; 
+      inUl = false; 
+    }
+    if (inTable) { 
+      // Close tbody, table, and the responsive wrapper div
+      html += '</tbody></table></div>'; 
+      inTable = false; 
+      tableHeaderParsed = false; 
+    }
   };
 
   const parseRow = (line, tag) => {
@@ -1573,7 +1602,8 @@ function renderMarkdownToHtml(md) {
     if (line.includes('|')) {
       if (!inTable) {
         closeAll();
-        html += '<table border="1" cellpadding="6" cellspacing="0">';
+        // Added wrapper div for horizontal scrolling
+        html += '<div class="table-container"><table border="1" cellpadding="6" cellspacing="0">';
         inTable = true;
         tableHeaderParsed = false;
       }
