@@ -827,7 +827,6 @@ let isGeneratingSuggestions = false;
 let isSendingChat = false;
 let recordingInterval = null;
 let transcribingBuffer = false;
-let interimText = '';
 
 // Groq model IDs 
 const WHISPER_MODEL = 'whisper-large-v3';
@@ -1585,9 +1584,6 @@ function escHtml(str) {
 function renderMarkdownToHtml(md) {
   if (!md) return '';
 
-  // If already HTML → return as-is
-  if (/<\/?[a-z][\s\S]*>/i.test(md)) return md;
-
   const esc = (str) =>
     str.replace(/&/g, '&amp;')
        .replace(/</g, '&lt;')
@@ -1678,9 +1674,6 @@ function renderMarkdownToHtml(md) {
   closeAll();
   return html;
 }
-
-// small helper used in table parsing filter (avoids runtime error in older browsers)
-function sEmpty(s) { return !s || s.trim().length === 0; }
 
 function hideEmpty(id) {
   const el = document.getElementById(id);
