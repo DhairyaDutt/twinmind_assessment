@@ -1531,52 +1531,88 @@ function escHtml(str) {
 function renderMarkdownToHtml(md) {
   if (!md) return '';
 
-  // 1. Helper to escape ONLY user content
-  const esc = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // If already HTML → return as-is
+  if (/<\/?[a-z][\s\S]*>/i.test(md)) return md;
 
-  // 2. Helper to apply styles AFTER escaping
-  const parseInline = (str) => {
-    return str
+  const esc = (str) =>
+    str.replace(/&/g, '&amp;')
+       .replace(/</g, '&lt;')
+       .replace(/>/g, '&gt;');
+
+  const parseInline = (str) =>
+    str
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/`(.+?)`/g, '<code>$1</code>');
-  };
 
   const lines = md.split('\n');
   let html = '';
   let inUl = false;
+  let inTable = false;
+  let tableHeaderParsed = false;
+
+  const closeAll = () => {
+    if (inUl) { html += '</ul>'; inUl = false; }
+    if (inTable) { html += '</table>'; inTable = false; tableHeaderParsed = false; }
+  };
+
+  const parseRow = (line, tag) => {
+    const cells = line.split('|').map(c => c.trim()).filter(c => c !== '');
+    return `<tr>${cells.map(c => `<${tag}>${parseInline(esc(c))}</${tag}>`).join('')}</tr>`;
+  };
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+    let line = lines[i].trim();
 
-    if (line === '') {
-      if (inUl) { html += '</ul>'; inUl = false; }
-      continue; 
+    if (!line) {
+      closeAll();
+      continue;
     }
 
-    // Check for Heading
+    // TABLE
+    if (line.includes('|')) {
+      if (!inTable) {
+        closeAll();
+        html += '<table border="1" cellpadding="6" cellspacing="0">';
+        inTable = true;
+        tableHeaderParsed = false;
+      }
+
+      // Skip separator line (----)
+      if (/^\|?[\s\-:|]+\|?$/.test(line)) continue;
+
+      if (!tableHeaderParsed) {
+        html += '<thead>' + parseRow(line, 'th') + '</thead><tbody>';
+        tableHeaderParsed = true;
+      } else {
+        html += parseRow(line, 'td');
+      }
+      continue;
+    }
+
+    // HEADINGS
     const h = line.match(/^(#{1,6})\s+(.*)$/);
     if (h) {
-      if (inUl) { html += '</ul>'; inUl = false; }
+      closeAll();
       const level = h[1].length;
       html += `<h${level}>${parseInline(esc(h[2]))}</h${level}>`;
       continue;
     }
 
-    // Check for List
+    // LIST
     const ul = line.match(/^[-*]\s+(.*)$/);
     if (ul) {
-      if (!inUl) { html += '<ul>'; inUl = true; }
+      if (!inUl) { closeAll(); html += '<ul>'; inUl = true; }
       html += `<li>${parseInline(esc(ul[1]))}</li>`;
       continue;
     }
 
-    // Paragraph (Default)
-    if (inUl) { html += '</ul>'; inUl = false; }
+    // PARAGRAPH
+    closeAll();
     html += `<p>${parseInline(esc(line))}</p>`;
   }
 
-  if (inUl) html += '</ul>';
+  closeAll();
   return html;
 }
 
