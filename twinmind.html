@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TwinMind — Live Suggestions</title>
+  <!-- Favicon: workspace file download.png -->
+  <link rel="icon" href="download.png" type="image/png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -62,6 +64,11 @@
   }
 
   #topbar .logo span { color: var(--accent); }
+  /* Logo image styles */
+  .logo img.logo-img { height: 20px; width: auto; display: block; }
+  .gate-logo img.gate-logo-img { height: 36px; width: auto; display: block; margin: 0 auto; }
+  /* fallback: hide textual logo if image present */
+  .logo span, .gate-logo span { display: none; }
 
   #topbar-right {
     margin-left: auto;
@@ -641,7 +648,7 @@
 <!-- API KEY GATE -->
 <div id="api-gate">
   <div class="gate-box">
-    <div class="gate-logo">Twin<span>Mind</span></div>
+    <div class="gate-logo"><img src="download.png" alt="TwinMind" class="gate-logo-img" /></div>
     <p>Live AI suggestions for your conversations.<br>Enter your <strong>Groq API key</strong> to get started.</p>
     <input type="password" id="gate-key-input" placeholder="gsk_…" autocomplete="off" />
     <button class="gate-btn" onclick="submitApiKey()">Start Session</button>
@@ -651,7 +658,7 @@
 
 <!-- TOP BAR -->
 <div id="topbar">
-  <div class="logo">Twin<span>Mind</span></div>
+  <div class="logo"><img src="download.png" alt="TwinMind" class="logo-img" /></div>
   <span style="font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;">live suggestions</span>
   <div id="topbar-right">
     <button class="btn" onclick="exportSession()">⬇ Export</button>
@@ -1348,6 +1355,14 @@ async function streamChatResponse(directPrompt, isSuggestion, messagesOverride) 
   const msgEl = addChatMessage('assistant', '', null, true);
   const bubbleContent = msgEl.querySelector('.msg-text');
 
+  // Quick guard: require an API key before sending network requests.
+  if (!apiKey) {
+    bubbleContent.textContent = 'No API key set. Enter your Groq API key in Settings to continue.';
+    console.warn('[TwinMind] Aborted chat request: no API key');
+    isSendingChat = false;
+    return;
+  }
+
   let messages;
   if (messagesOverride) {
     messages = messagesOverride;
@@ -1362,7 +1377,7 @@ async function streamChatResponse(directPrompt, isSuggestion, messagesOverride) 
   }
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -1378,8 +1393,21 @@ async function streamChatResponse(directPrompt, isSuggestion, messagesOverride) 
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      bubbleContent.textContent = `Error: ${err?.error?.message || 'API error'}`;
+      // Try to extract a helpful error message
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson?.error?.message || JSON.stringify(errJson);
+      } catch(e) {}
+      bubbleContent.textContent = `Error: ${errMsg}`;
+      console.error('[TwinMind] Chat API error:', res.status, errMsg);
+      isSendingChat = false;
+      return;
+    }
+
+    if (!res.body) {
+      bubbleContent.textContent = 'Error: API did not return a streaming body.';
+      console.error('[TwinMind] Chat API returned no body for streaming response');
       isSendingChat = false;
       return;
     }
@@ -1406,7 +1434,8 @@ async function streamChatResponse(directPrompt, isSuggestion, messagesOverride) 
           const delta = obj.choices?.[0]?.delta?.content || '';
           if (delta) {
             fullText += delta;
-            bubbleContent.textContent = fullText;
+            // Render a small subset of Markdown safely to HTML for readability
+            bubbleContent.innerHTML = renderMarkdownToHtml(fullText);
             bubbleContent.appendChild(cursor);
             document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
           }
@@ -1414,14 +1443,17 @@ async function streamChatResponse(directPrompt, isSuggestion, messagesOverride) 
       }
     }
 
-    cursor.remove();
-    bubbleContent.textContent = fullText;
+  cursor.remove();
+  // Final render (safe HTML)
+  bubbleContent.innerHTML = renderMarkdownToHtml(fullText);
 
     // Save to history
     chatHistory.push({ role: 'assistant', content: fullText });
 
   } catch(err) {
-    bubbleContent.textContent = 'Connection error. Check your API key and try again.';
+    const msg = err && err.message ? err.message : String(err);
+    bubbleContent.textContent = `Connection error: ${msg}`;
+    console.error('[TwinMind] streamChatResponse error:', err);
   }
 
   isSendingChat = false;
@@ -1492,6 +1524,64 @@ function escHtml(str) {
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;');
 }
+
+// Render a small, safe subset of Markdown to HTML.
+// Supports: bold (**text**), italic (*text*), unordered lists (- item), and paragraphs/line breaks.
+// Escapes HTML first to avoid XSS.
+function renderMarkdownToHtml(md) {
+  if (!md) return '';
+
+  // 1. Helper to escape ONLY user content
+  const esc = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 2. Helper to apply styles AFTER escaping
+  const parseInline = (str) => {
+    return str
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>');
+  };
+
+  const lines = md.split('\n');
+  let html = '';
+  let inUl = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    if (line === '') {
+      if (inUl) { html += '</ul>'; inUl = false; }
+      continue; 
+    }
+
+    // Check for Heading
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      if (inUl) { html += '</ul>'; inUl = false; }
+      const level = h[1].length;
+      html += `<h${level}>${parseInline(esc(h[2]))}</h${level}>`;
+      continue;
+    }
+
+    // Check for List
+    const ul = line.match(/^[-*]\s+(.*)$/);
+    if (ul) {
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += `<li>${parseInline(esc(ul[1]))}</li>`;
+      continue;
+    }
+
+    // Paragraph (Default)
+    if (inUl) { html += '</ul>'; inUl = false; }
+    html += `<p>${parseInline(esc(line))}</p>`;
+  }
+
+  if (inUl) html += '</ul>';
+  return html;
+}
+
+// small helper used in table parsing filter (avoids runtime error in older browsers)
+function sEmpty(s) { return !s || s.trim().length === 0; }
 
 function hideEmpty(id) {
   const el = document.getElementById(id);
