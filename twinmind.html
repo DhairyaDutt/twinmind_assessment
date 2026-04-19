@@ -28,6 +28,7 @@
     --t-color: #34d399;
     --a-color: #fb923c;
     --f-color: #f472b6;
+    --c-color: #38bdf8;
     --col-w: calc((100vw - 4px) / 3);
   }
 
@@ -303,6 +304,7 @@
   .suggestion-card.type-talking::before { background: var(--t-color); }
   .suggestion-card.type-answer::before { background: var(--a-color); }
   .suggestion-card.type-fact::before { background: var(--f-color); }
+  .suggestion-card.type-clarification::before { background: var(--c-color); }
 
   .suggestion-card:hover {
     border-color: var(--border-light);
@@ -322,6 +324,7 @@
   .type-talking .suggestion-type { color: var(--t-color); }
   .type-answer .suggestion-type { color: var(--a-color); }
   .type-fact .suggestion-type { color: var(--f-color); }
+  .type-clarification .suggestion-type { color: var(--c-color); }
 
   .suggestion-preview {
     font-size: 13px;
@@ -834,37 +837,58 @@ const CHAT_MODEL = 'openai/gpt-oss-120b';
 // SETTINGS (defaults)
 // ═══════════════════════════════════════════
 const DEFAULT_SETTINGS = {
-  suggestionPrompt: `You are an AI meeting copilot generating real-time suggestions. Analyze the recent conversation transcript and produce exactly 3 suggestions that would genuinely help the person RIGHT NOW.
+  suggestionPrompt: `You are an AI meeting copilot generating real-time suggestions. Before producing suggestions, silently identify the conversation phase:
+- OPENING: introductions, small talk, agenda-setting (first ~2 min)
+- EXPLORATION: discussing problems, sharing context, brainstorming
+- DECISION: weighing options, debating tradeoffs, converging
+- CLOSING: action items, next steps, wrap-up
 
-Each suggestion must be one of these types:
-- QUESTION: A question the user could ask to move the conversation forward
-- TALKING_POINT: A relevant fact, example, or data point to share
-- ANSWER: A direct answer to a question that was just asked
-- FACT_CHECK: A correction or clarification of something said
+Then produce exactly 3 suggestions that fit the phase. Choose types from:
+- QUESTION: A sharp question the user could ask RIGHT NOW to move things forward
+- TALKING_POINT: A concrete fact, stat, or example to add credibility (include numbers when possible)
+- ANSWER: A direct answer to a question that was just asked in the transcript
+- FACT_CHECK: A correction or important nuance to something stated
+- CLARIFICATION: Something vague or ambiguous that should be pinned down before moving on
+
+Phase guidance:
+- OPENING → favor QUESTION types that open up the agenda
+- EXPLORATION → mix QUESTION, TALKING_POINT, ANSWER
+- DECISION → favor FACT_CHECK, CLARIFICATION, TALKING_POINT with data
+- CLOSING → favor CLARIFICATION (who owns what?), QUESTION (anything missed?)
 
 Rules:
-- Choose types based on what the conversation actually needs (mix types intelligently)
-- Each preview must standalone deliver value — useful even if never clicked
-- Be specific and concrete, not generic
-- If someone just asked a question, prioritize ANSWER type
-- If the conversation is about a technical topic, include relevant TALKING_POINT with numbers/data
-- If a claim seems questionable, add a FACT_CHECK
-- Previews should be 1-2 punchy sentences max
+- Each preview must deliver standalone value — useful even if never clicked
+- Be specific and concrete, never generic
+- Do NOT repeat or rephrase any suggestion from the previous batch (listed below)
+- Previews are 1-2 punchy sentences max
+
+PREVIOUS BATCH (do not repeat these ideas):
+{{LAST_BATCH}}
 
 RECENT TRANSCRIPT:
 {{TRANSCRIPT}}
 
 Respond with ONLY valid JSON, no markdown, no explanation:
-{"suggestions":[{"type":"QUESTION","preview":"..."},{"type":"TALKING_POINT","preview":"..."},{"type":"FACT_CHECK","preview":"..."}]}`,
+{"suggestions":[{"type":"QUESTION","preview":"..."},{"type":"TALKING_POINT","preview":"..."},{"type":"CLARIFICATION","preview":"..."}]}`,
 
-  answerPrompt: `You are an AI meeting copilot providing a detailed, helpful answer. The user clicked this suggestion during a live conversation.
+  answerPrompt: `You are an AI meeting copilot. The user is in a live conversation and clicked this suggestion for immediate help.
 
-Suggestion clicked: {{SUGGESTION}}
+Suggestion: {{SUGGESTION}}
 
-Full conversation context:
+Conversation transcript:
 {{TRANSCRIPT}}
 
-Provide a clear, well-structured response (3-6 sentences or bullet points as appropriate). Be specific, accurate, and immediately useful. Avoid filler. Write as if you're a knowledgeable colleague whispering in their ear.`,
+Respond in this exact structure:
+
+**Context** (1-2 sentences: why this matters right now based on the conversation)
+
+**Key points**
+- 2-4 specific, accurate bullet points
+
+**You could say:**
+> "..." (1-2 sentences the user can speak out loud verbatim, right now, in a natural conversational tone)
+
+Be direct. No filler. The "You could say" line is the most important part.`,
 
   chatPrompt: `You are TwinMind, an AI meeting copilot. You have access to the live conversation transcript below. Answer the user's question concisely and helpfully, referencing the conversation context when relevant. Be direct and useful.
 
@@ -1170,7 +1194,15 @@ async function generateSuggestions() {
   clearSuggestionError();
 
   const recentTranscript = fullTranscript.slice(-settings.suggestionCtx);
-  const prompt = settings.suggestionPrompt.replace('{{TRANSCRIPT}}', recentTranscript);
+
+  // Build last-batch context so the model doesn't repeat prior suggestions
+  const lastBatchText = suggestionBatches.length > 0
+    ? suggestionBatches[0].suggestions.map(s => `- [${s.type}] ${s.preview}`).join('\n')
+    : 'None — this is the first batch.';
+
+  const prompt = settings.suggestionPrompt
+    .replace('{{LAST_BATCH}}', lastBatchText)
+    .replace('{{TRANSCRIPT}}', recentTranscript);
 
   console.log('[TwinMind] Generating suggestions, transcript length:', recentTranscript.length);
 
@@ -1291,12 +1323,12 @@ function addSuggestionBatch(suggestions) {
 }
 
 function typeToClass(type) {
-  const map = { QUESTION:'type-question', TALKING_POINT:'type-talking', ANSWER:'type-answer', FACT_CHECK:'type-fact' };
+  const map = { QUESTION:'type-question', TALKING_POINT:'type-talking', ANSWER:'type-answer', FACT_CHECK:'type-fact', CLARIFICATION:'type-clarification' };
   return map[type] || 'type-question';
 }
 
 function formatType(type) {
-  const map = { QUESTION:'Question to Ask', TALKING_POINT:'Talking Point', ANSWER:'Answer', FACT_CHECK:'Fact-Check' };
+  const map = { QUESTION:'Question to Ask', TALKING_POINT:'Talking Point', ANSWER:'Answer', FACT_CHECK:'Fact-Check', CLARIFICATION:'Clarification' };
   return map[type] || type;
 }
 
